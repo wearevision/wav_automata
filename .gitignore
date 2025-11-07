@@ -1,12 +1,26 @@
-.env
 # ---- REPO PROTECTOR ----
+
+# Env files
 .env
 *.env
 .env.*
-/outputs/*
+
+# Python caches
 __pycache__/
-.vscode/
-.idea/
 *.pyc
 *.pyo
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Editor & OS
+.vscode/
+.idea/
 .DS_Store
+
+# Outputs & builds
+/outputs/*
+dist/
+build/

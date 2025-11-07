@@ -156,6 +156,8 @@ def _topical_relevance(supabase: Any, topic: str) -> float:
     y similitudes promedio.
     """
     try:
+        if not supabase:
+            return 0.5
         # Últimos 20 items
         recent = (
             supabase.table("items")
@@ -192,7 +194,11 @@ def next_post(account: str = "vibecodinglatam") -> NextPostResponse:
     Combina engagement histórico y relevancia temática:
     priority = 0.6 * engagement_score + 0.4 * topical_relevance
     """
-    supabase = get_client()
+    try:
+        supabase = get_client()
+    except Exception:
+        # Sin entorno de Supabase configurado: usar heurística directa
+        return _heuristic_next_post(account)
 
     # 1) Intentar derivar topic más prometedor (título más reciente)
     topic_hint = None
@@ -280,7 +286,11 @@ def next_post(account: str = "vibecodinglatam") -> NextPostResponse:
 @router.post("/feedback", response_model=FeedbackResponse)
 def store_feedback(payload: FeedbackRequest) -> FeedbackResponse:
     """Guarda feedback real del post publicada para mejorar el scheduler."""
-    supabase = get_client()
+    try:
+        supabase = get_client()
+    except Exception:
+        engagement = _compute_engagement_score(payload.model_dump())
+        return FeedbackResponse(status="error", stored=False, engagement_score=round(engagement, 4))
 
     engagement = _compute_engagement_score(payload.model_dump())
 
@@ -309,7 +319,10 @@ def trends(limit: int = 6) -> List[TrendItem]:
 
     momentum = current_week_count / max(1, previous_week_count)
     """
-    supabase = get_client()
+    try:
+        supabase = get_client()
+    except Exception:
+        supabase = None
 
     # Ventana: últimos 14 días
     now = datetime.now(timezone.utc)

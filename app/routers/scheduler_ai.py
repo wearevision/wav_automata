@@ -48,7 +48,9 @@ except Exception:  # pragma: no cover - fallback mínimo
 
     np = _NP()
 
+from ..models.schemas import GeneratorRequest, GeneratorResponse
 from ..services.supabase_client import get_client
+from .generator import generate_post
 
 router = APIRouter(prefix="/scheduler", tags=["scheduler"])
 
@@ -85,6 +87,19 @@ class FeedbackResponse(BaseModel):
 class TrendItem(BaseModel):
     topic: str
     momentum: float
+
+
+class AutoGenerateRequest(BaseModel):
+    account: str = "vibecodinglatam"
+    brand_voice: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    length: Optional[int] = 120
+
+
+class AutoGenerateResponse(BaseModel):
+    scheduled: NextPostResponse
+    content: GeneratorResponse
+    item_id: Optional[int] = None
 
 
 # --------------------------
@@ -374,3 +389,47 @@ def trends(limit: int = 6) -> List[TrendItem]:
     # Ordena por momentum descendente y limita
     items.sort(key=lambda x: x.momentum, reverse=True)
     return items[: max(1, limit)]
+
+
+@router.post("/auto_generate", response_model=AutoGenerateResponse)
+def auto_generate(payload: AutoGenerateRequest) -> AutoGenerateResponse:
+    """Orquesta recomendación + generación y persiste el item en `items`.
+
+    - Usa `next_post` para obtener topic/horario sugerido.
+    - Genera contenido con `generator.generate_post`.
+    - Inserta un item en Supabase con source="scheduler".
+    """
+    # 1) Recomendación
+    scheduled = next_post(account=payload.account)
+
+    # 2) Generación
+    gen_req = GeneratorRequest(
+        topic=scheduled.topic,
+        brand_voice=payload.brand_voice,
+        keywords=payload.keywords,
+        length=payload.length,
+    )
+    content = generate_post(gen_req)
+
+    # 3) Persistencia (best-effort)
+    item_id: Optional[int] = None
+    try:
+        supabase = get_client()
+        resp = (
+            supabase.table("items")
+            .insert(
+                {
+                    "source": "scheduler",
+                    "title": scheduled.topic,
+                    "url": None,
+                    "summary": content.text,
+                }
+            )
+            .execute()
+        )
+        if resp.data:
+            item_id = resp.data[0].get("id")
+    except Exception:
+        item_id = None
+
+    return AutoGenerateResponse(scheduled=scheduled, content=content, item_id=item_id)

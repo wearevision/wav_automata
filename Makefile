@@ -1,4 +1,4 @@
-.PHONY: install run test fmt lint type hooks
+.PHONY: install run test fmt lint type hooks check
 
 PY=python
 PIP=pip
@@ -25,3 +25,5 @@ type:
 
 hooks:
 	pre-commit install
+
+check: lint type test

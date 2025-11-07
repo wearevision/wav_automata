@@ -51,6 +51,7 @@ make fmt       # formatea con black
 make lint      # ruff + black --check
 make type      # mypy type-check
 make hooks     # instala pre-commit hooks
+make check     # lint + type + tests
 ```
 
 ---

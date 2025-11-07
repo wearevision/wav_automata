@@ -210,6 +210,67 @@ def _topical_relevance(supabase: Any, topic: str) -> float:
         return 0.5
 
 
+def _get_model_params(supabase: Any, account: str) -> tuple[float, float, float]:
+    """Obtiene (w_engagement, w_relevance, learning_rate) para una cuenta.
+
+    Si no existe registro, intenta crearlo con defaults (0.6, 0.4, 0.05).
+    Ante cualquier error, devuelve los defaults.
+    """
+    DEFAULTS = (0.6, 0.4, 0.05)
+    try:
+        if not supabase:
+            return DEFAULTS
+        res = (
+            supabase.table("scheduler_model_params")
+            .select("w_engagement,w_relevance,learning_rate")
+            .eq("account", account)
+            .limit(1)
+            .execute()
+        )
+        row = (res.data or [None])[0]
+        if not row:
+            try:
+                supabase.table("scheduler_model_params").insert(
+                    {
+                        "account": account,
+                        "w_engagement": 0.6,
+                        "w_relevance": 0.4,
+                        "learning_rate": 0.05,
+                    }
+                ).execute()
+                return DEFAULTS
+            except Exception:
+                return DEFAULTS
+        return (
+            float(row.get("w_engagement", 0.6)),
+            float(row.get("w_relevance", 0.4)),
+            float(row.get("learning_rate", 0.05)),
+        )
+    except Exception:
+        return DEFAULTS
+
+
+def _update_model_params(
+    supabase: Any, account: str, w_e: float, w_r: float, learning_rate: float
+) -> None:
+    """Actualiza pesos del modelo para una cuenta. Falla de forma silenciosa."""
+    try:
+        if not supabase:
+            return
+        supabase.table("scheduler_model_params").upsert(
+            {
+                "account": account,
+                "w_engagement": w_e,
+                "w_relevance": w_r,
+                "learning_rate": learning_rate,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ).execute()
+    except Exception:
+        # Silencioso: no romper endpoint por fallos de tabla/conexión
+        pass
+
+
 # --------------------------
 # Endpoints
 # --------------------------
@@ -297,7 +358,11 @@ def next_post(account: str = "vibecodinglatam") -> NextPostResponse:
         topic = topic_hint or "Innovación humana y colaboración IA"
         top_rel = _topical_relevance(supabase, topic)
 
-        priority = float(0.6 * np.clip(best_value, 0.0, 1.0) + 0.4 * np.clip(top_rel, 0.0, 1.0))
+        # 4) Pesos por cuenta (defaults si no existen)
+        w_e, w_r, _lr = _get_model_params(supabase, account)
+        best_value = float(np.clip(best_value, 0.0, 1.0))
+        top_rel = float(np.clip(top_rel, 0.0, 1.0))
+        priority = float(w_e * best_value + w_r * top_rel)
 
         return NextPostResponse(
             account=account,
@@ -336,9 +401,57 @@ def store_feedback(payload: FeedbackRequest) -> FeedbackResponse:
                 "posted_at": datetime.now(timezone.utc).isoformat(),
             }
         ).execute()
-        return FeedbackResponse(status="ok", stored=True, engagement_score=round(engagement, 4))
     except Exception:
-        return FeedbackResponse(status="error", stored=False, engagement_score=round(engagement, 4))
+        # Si no se pudo guardar, seguir con aprendizaje de todas formas
+        pass
+
+    # Mini gradient descent learning
+    try:
+        # 1) Pesos actuales
+        w_e, w_r, lr = _get_model_params(supabase, payload.account)
+
+        # 2) Señales
+        #    Para topical_relevance usamos topic más reciente como proxy
+        topic_hint = None
+        try:
+            items = (
+                supabase.table("items")
+                .select("title")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if items.data:
+                topic_hint = (items.data[0].get("title") or "").strip() or None
+        except Exception:
+            topic_hint = None
+        topic = topic_hint or "Innovación humana y colaboración IA"
+        top_rel = float(np.clip(_topical_relevance(supabase, topic), 0.0, 1.0))
+
+        # 3) Predicción y error
+        if hasattr(np, "array"):
+            weights = np.array([w_e, w_r], dtype=float)
+            feats = np.array([engagement, top_rel], dtype=float)
+            pred = float(weights.dot(feats))
+            err = float(engagement - pred)
+            weights = weights + lr * err * feats
+            s = float(weights.sum()) or 1.0
+            weights = np.clip(weights / s, 0.0, 1.0)
+            w_e, w_r = float(weights[0]), float(weights[1])
+        else:
+            pred = w_e * engagement + w_r * top_rel
+            err = engagement - pred
+            w_e = w_e + lr * err * engagement
+            w_r = w_r + lr * err * top_rel
+            s = (w_e + w_r) or 1.0
+            w_e, w_r = max(0.0, w_e / s), max(0.0, w_r / s)
+
+        # 4) Persistir
+        _update_model_params(supabase, payload.account, w_e, w_r, lr)
+    except Exception as e:
+        print("[scheduler.learning] warning:", e)
+
+    return FeedbackResponse(status="ok", stored=True, engagement_score=round(engagement, 4))
 
 
 @router.get("/trends", response_model=List[TrendItem])

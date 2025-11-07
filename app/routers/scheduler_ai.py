@@ -11,10 +11,11 @@ Notas:
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 try:
@@ -122,6 +123,25 @@ class WeightsResponse(BaseModel):
     updated_at: Optional[str] = None
     message: Optional[str] = None
     error: Optional[str] = None
+
+
+class WeightsUpdatePayload(BaseModel):
+    """Solicitud de actualización manual de pesos del scheduler.
+
+    Se valida que w_engagement y w_relevance estén en [0,1], que learning_rate
+    esté en [0.001, 0.1] y que la suma de los pesos sea ≈ 1 con tolerancia 0.05.
+    """
+
+    account: str
+    w_engagement: float
+    w_relevance: float
+    learning_rate: float = 0.05
+
+
+class WeightsUpdateResponse(BaseModel):
+    account: str
+    status: str
+    new_weights: dict
 
 
 class RunDailyRequest(BaseModel):
@@ -659,3 +679,65 @@ def get_weights(account: str) -> WeightsResponse:
             message=f"Error consultando parámetros: {e}",
             error="query_failed",
         )
+
+
+@router.post("/weights/update", response_model=WeightsUpdateResponse)
+def update_weights(
+    payload: WeightsUpdatePayload,
+    x_admin_token: str = Header(..., alias="X-Admin-Token"),
+) -> WeightsUpdateResponse:
+    """Actualiza manualmente pesos del scheduler con auditoría.
+
+    Seguridad basada en `X-Admin-Token` (comparado con ADMIN_TOKEN del entorno).
+    Aplica validaciones estrictas de rangos y normalización tolerada.
+    Registra un evento en `scheduler_model_audit` (best-effort).
+    """
+    admin_token = os.getenv("ADMIN_TOKEN")
+    if not admin_token or x_admin_token != admin_token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    w_e = float(payload.w_engagement)
+    w_r = float(payload.w_relevance)
+    lr = float(payload.learning_rate)
+
+    # Validaciones
+    if not (0.0 <= w_e <= 1.0) or not (0.0 <= w_r <= 1.0):
+        raise HTTPException(status_code=422, detail="Weights must be within [0,1]")
+    if not (0.001 <= lr <= 0.1):
+        raise HTTPException(status_code=422, detail="learning_rate must be within [0.001, 0.1]")
+    if abs((w_e + w_r) - 1.0) > 0.05:
+        raise HTTPException(status_code=422, detail="w_engagement + w_relevance must be ~1 ± 0.05")
+
+    try:
+        supabase = get_client()
+    except Exception:
+        raise HTTPException(status_code=503, detail="Supabase unavailable")
+
+    # Pesos previos
+    prev_w_e, prev_w_r, prev_lr = _get_model_params(supabase, payload.account)
+
+    # Upsert de nuevos pesos
+    _update_model_params(supabase, payload.account, w_e, w_r, lr)
+
+    # Auditoría (best-effort)
+    try:
+        supabase.table("scheduler_model_audit").insert(
+            {
+                "account": payload.account,
+                "prev_w_engagement": prev_w_e,
+                "prev_w_relevance": prev_w_r,
+                "new_w_engagement": w_e,
+                "new_w_relevance": w_r,
+                "learning_rate": lr,
+                "updated_by": "admin",
+                "source": "manual",
+            }
+        ).execute()
+    except Exception as e:
+        print("[scheduler.audit] warning:", e)
+
+    return WeightsUpdateResponse(
+        account=payload.account,
+        status="updated",
+        new_weights={"w_engagement": w_e, "w_relevance": w_r, "learning_rate": lr},
+    )

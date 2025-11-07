@@ -8,3 +8,6 @@ openai>=1.52
 pytest>=8.2
 black>=24.8
 numpy>=2.3
+ruff>=0.6
+pre-commit>=4.0
+mypy>=1.11

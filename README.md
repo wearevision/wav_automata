@@ -1,4 +1,4 @@
-# WAV Automata 🧠  
+# WAV Automata 🧠
 ![CI](https://github.com/wearevision/wav_automata/actions/workflows/ci.yml/badge.svg?branch=main)
 
 **La inteligencia viva detrás de la comunicación coherente.**
@@ -12,10 +12,10 @@ y ROI (Retorno de Inversión).
 
 ### 🧠 Arquitectura
 
-- **FastAPI + Python 3.11** → capa de orquestación e inferencia  
-- **Supabase (Postgres + pgvector)** → persistencia y análisis semántico  
-- **OpenAI / Gemini** → embeddings y generación contextual  
-- **n8n / Make** → automatización de flujos y publicación  
+- **FastAPI + Python 3.11** → capa de orquestación e inferencia
+- **Supabase (Postgres + pgvector)** → persistencia y análisis semántico
+- **OpenAI / Gemini** → embeddings y generación contextual
+- **n8n / Make** → automatización de flujos y publicación
 - **Railway / Cloud Run** → despliegue cloud persistente
 
 ---
@@ -48,6 +48,9 @@ make install   # instala dependencias
 make run       # levanta API con reload
 make test      # corre pytest
 make fmt       # formatea con black
+make lint      # ruff + black --check
+make type      # mypy type-check
+make hooks     # instala pre-commit hooks
 ```
 
 ---

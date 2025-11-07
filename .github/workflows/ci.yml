@@ -28,6 +28,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Lint (ruff) and format check (black)
+        run: |
+          ruff check .
+          python -m black --check app tests
+
+      - name: Type check (mypy)
+        run: |
+          python -m mypy app
+
       - name: Run tests
         run: pytest -q
 

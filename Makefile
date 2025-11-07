@@ -1,4 +1,4 @@
-.PHONY: install run test fmt
+.PHONY: install run test fmt lint type hooks
 
 PY=python
 PIP=pip
@@ -15,3 +15,13 @@ test:
 
 fmt:
 	$(PY) -m black app tests
+
+lint:
+	ruff check .
+	$(PY) -m black --check app tests
+
+type:
+	$(PY) -m mypy app
+
+hooks:
+	pre-commit install

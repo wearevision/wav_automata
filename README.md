@@ -20,7 +20,7 @@ y ROI (Retorno de Inversión).
 
 ---
 
-### 🧩 Endpoints iniciales
+### 🧩 Endpoints
 
 | Endpoint | Descripción |
 |-----------|--------------|
@@ -28,6 +28,11 @@ y ROI (Retorno de Inversión).
 | `/semantic/embed_item` | Genera embeddings y metadatos |
 | `/semantic/score` | Calcula relevancia, momentum y ROI predictivo |
 | `/generator/post` | Genera copy, hashtags y prompt visual coherente |
+| `/scheduler/next_post` | Recomendación de cuenta/hora/formato/tema |
+| `/scheduler/feedback` | Guarda métricas reales del post (engagement) |
+| `/scheduler/trends` | Momentum semanal por tema |
+| `/scheduler/auto_generate` | Recomienda + genera contenido y guarda item |
+| `/scheduler/run_daily` | Ejecuta auto_generate en lote por cuentas |
 
 ---
 
@@ -38,6 +43,43 @@ uvicorn app.main:app --reload
 ```
 
 La API estará disponible en [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+---
+
+### 📈 Esquema SQL
+
+En `src/sql/` encontrarás:
+- `schema_pgvector.sql` → tablas `items` y `item_embeddings` + índice IVFFLAT
+- `schema_posts_feedback.sql` → tabla `posts_feedback` (engagement histórico)
+
+Ejecuta ambos en el SQL Editor de Supabase.
+
+---
+
+### 🧪 Ejemplos rápidos (curl)
+
+```bash
+# Recomendación
+curl -s http://127.0.0.1:8000/scheduler/next_post | jq
+
+# Generar automáticamente y guardar item
+curl -s -X POST http://127.0.0.1:8000/scheduler/auto_generate \
+	-H 'Content-Type: application/json' \
+	-d '{"account":"vibecodinglatam","brand_voice":"humano-visionario","keywords":["IA","creatividad"],"length":140}' | jq
+
+# Lote diario
+curl -s -X POST http://127.0.0.1:8000/scheduler/run_daily \
+	-H 'Content-Type: application/json' \
+	-d '{"accounts":["vibecodinglatam","vision"]}' | jq
+
+# Feedback real del post
+curl -s -X POST http://127.0.0.1:8000/scheduler/feedback \
+	-H 'Content-Type: application/json' \
+	-d '{"account":"vibecodinglatam","post_id":"abc123","likes":540,"comments":82,"saves":60,"reach":14000}' | jq
+
+# Tendencias semanales
+curl -s http://127.0.0.1:8000/scheduler/trends | jq
+```
 
 ---
 

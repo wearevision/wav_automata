@@ -1,4 +1,5 @@
-# WAV Automata 🧠
+# WAV Automata 🧠  
+![CI](https://github.com/wearevision/wav_automata/actions/workflows/ci.yml/badge.svg?branch=main)
 
 **La inteligencia viva detrás de la comunicación coherente.**
 
@@ -37,6 +38,17 @@ uvicorn app.main:app --reload
 ```
 
 La API estará disponible en [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+---
+
+### 🧰 Atajos con Makefile
+
+```bash
+make install   # instala dependencias
+make run       # levanta API con reload
+make test      # corre pytest
+make fmt       # formatea con black
+```
 
 ---
 

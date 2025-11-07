@@ -102,6 +102,19 @@ class AutoGenerateResponse(BaseModel):
     item_id: Optional[int] = None
 
 
+class RunDailyRequest(BaseModel):
+    """Payload para ejecutar generación diaria por múltiples cuentas."""
+
+    accounts: List[str] = ["vibecodinglatam"]
+    brand_voice: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    length: Optional[int] = 120
+
+
+class RunDailyResponse(BaseModel):
+    results: List[AutoGenerateResponse]
+
+
 # --------------------------
 # Utilidades internas
 # --------------------------
@@ -433,3 +446,23 @@ def auto_generate(payload: AutoGenerateRequest) -> AutoGenerateResponse:
         item_id = None
 
     return AutoGenerateResponse(scheduled=scheduled, content=content, item_id=item_id)
+
+
+@router.post("/run_daily", response_model=RunDailyResponse)
+def run_daily(payload: RunDailyRequest) -> RunDailyResponse:
+    """Ejecuta auto_generate para una lista de cuentas y devuelve resultados.
+
+    Persiste cada item (best-effort) mediante el proceso interno de auto_generate.
+    """
+    results: List[AutoGenerateResponse] = []
+    for acc in payload.accounts:
+        ag = auto_generate(
+            AutoGenerateRequest(
+                account=acc,
+                brand_voice=payload.brand_voice,
+                keywords=payload.keywords,
+                length=payload.length,
+            )
+        )
+        results.append(ag)
+    return RunDailyResponse(results=results)

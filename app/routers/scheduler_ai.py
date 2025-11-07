@@ -102,6 +102,28 @@ class AutoGenerateResponse(BaseModel):
     item_id: Optional[int] = None
 
 
+class WeightsResponse(BaseModel):
+    """Parámetros actuales del modelo por cuenta.
+
+    Atributos:
+        account: Cuenta consultada.
+        w_engagement: Peso del componente de engagement.
+        w_relevance: Peso del componente de relevancia temática.
+        learning_rate: Tasa de aprendizaje usada en el ajuste incremental.
+        updated_at: Timestamp de última actualización, si existe.
+        message: Mensaje informativo (por ejemplo, uso de defaults).
+        error: Código de error si la consulta falla.
+    """
+
+    account: str
+    w_engagement: float
+    w_relevance: float
+    learning_rate: float
+    updated_at: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
 class RunDailyRequest(BaseModel):
     """Payload para ejecutar generación diaria por múltiples cuentas."""
 
@@ -579,3 +601,61 @@ def run_daily(payload: RunDailyRequest) -> RunDailyResponse:
         )
         results.append(ag)
     return RunDailyResponse(results=results)
+
+
+@router.get("/weights", response_model=WeightsResponse)
+def get_weights(account: str) -> WeightsResponse:
+    """Devuelve los pesos actuales del modelo por cuenta.
+
+    Usa `scheduler_model_params`. Si no existen registros, devuelve defaults
+    (0.6/0.4) y un mensaje informativo. En caso de error de conexión/tabla,
+    retorna un objeto con `error` y defaults seguros.
+    """
+    try:
+        supabase = get_client()
+    except Exception:
+        return WeightsResponse(
+            account=account,
+            w_engagement=0.6,
+            w_relevance=0.4,
+            learning_rate=0.05,
+            updated_at=None,
+            message="Error conectando a Supabase",
+            error="supabase_unavailable",
+        )
+
+    try:
+        res = (
+            supabase.table("scheduler_model_params")
+            .select("account,w_engagement,w_relevance,learning_rate,updated_at")
+            .eq("account", account)
+            .limit(1)
+            .execute()
+        )
+        row = (res.data or [None])[0]
+        if not row:
+            return WeightsResponse(
+                account=account,
+                w_engagement=0.6,
+                w_relevance=0.4,
+                learning_rate=0.05,
+                updated_at=None,
+                message="No se encontraron parámetros; se usan defaults 0.6/0.4.",
+            )
+        return WeightsResponse(
+            account=account,
+            w_engagement=float(row.get("w_engagement", 0.6)),
+            w_relevance=float(row.get("w_relevance", 0.4)),
+            learning_rate=float(row.get("learning_rate", 0.05)),
+            updated_at=str(row.get("updated_at")) if row.get("updated_at") is not None else None,
+        )
+    except Exception as e:
+        return WeightsResponse(
+            account=account,
+            w_engagement=0.6,
+            w_relevance=0.4,
+            learning_rate=0.05,
+            updated_at=None,
+            message=f"Error consultando parámetros: {e}",
+            error="query_failed",
+        )

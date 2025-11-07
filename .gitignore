@@ -1,1 +1,12 @@
 .env
+# ---- REPO PROTECTOR ----
+.env
+*.env
+.env.*
+/outputs/*
+__pycache__/
+.vscode/
+.idea/
+*.pyc
+*.pyo
+.DS_Store

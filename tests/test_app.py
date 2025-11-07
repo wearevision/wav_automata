@@ -5,7 +5,7 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_health_ok():
+def test_health_ok() -> None:
     r = client.get("/health")
     assert r.status_code == 200
     data = r.json()
@@ -13,17 +13,17 @@ def test_health_ok():
     assert data.get("project") == "WAV Automata"
 
 
-def test_generator_post_minimal():
+def test_generator_post_minimal() -> None:
     payload = {"topic": "Lanzamiento de producto"}
     r = client.post("/generator/post", json=payload)
     assert r.status_code == 200
     data = r.json()
-    assert "copy" in data and isinstance(data["copy"], str)
+    assert "text" in data and isinstance(data["text"], str)
     assert "hashtags" in data and isinstance(data["hashtags"], list)
     assert "visual_prompt" in data and isinstance(data["visual_prompt"], str)
 
 
-def test_semantic_score_basic():
+def test_semantic_score_basic() -> None:
     payload = {"text": "IA generativa en marketing", "context": "marketing IA contenidos"}
     r = client.post("/semantic/score", json=payload)
     assert r.status_code == 200

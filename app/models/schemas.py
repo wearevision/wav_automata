@@ -46,6 +46,6 @@ class GeneratorRequest(BaseModel):
 
 
 class GeneratorResponse(BaseModel):
-    copy: str
+    text: str
     hashtags: List[str]
     visual_prompt: str

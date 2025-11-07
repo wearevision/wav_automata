@@ -4,12 +4,11 @@ from fastapi import APIRouter
 
 from ..models.schemas import GeneratorRequest, GeneratorResponse
 
-
 router = APIRouter(prefix="/generator", tags=["generator"])
 
 
 @router.post("/post", response_model=GeneratorResponse)
-def generate_post(payload: GeneratorRequest):
+def generate_post(payload: GeneratorRequest) -> GeneratorResponse:
     """
     Genera un copy, hashtags y prompt visual coherente con la cuenta o marca indicada.
     Puede ser usado por el agente para generar contenido diario automatizado.
@@ -25,7 +24,7 @@ def generate_post(payload: GeneratorRequest):
         "wavwearevision": "tono institucional, reflexivo y estratégico",
         "vibecodinglatam": "tono innovador, optimista y tecnológico",
         "consdelrosario": "tono empático, emocional y humano",
-        "felguetaedwards": "tono inspirador, introspectivo y honesto"
+        "felguetaedwards": "tono inspirador, introspectivo y honesto",
     }
     style = styles.get(account, f"tono {voice}" if voice else "tono neutro y coherente")
 
@@ -55,4 +54,4 @@ def generate_post(payload: GeneratorRequest):
         f"{style}, composición limpia, color balanceado, formato cuadrado 1:1."
     )
 
-    return GeneratorResponse(copy=copy.strip(), hashtags=hashtags[:8], visual_prompt=visual_prompt)
+    return GeneratorResponse(text=copy.strip(), hashtags=hashtags[:8], visual_prompt=visual_prompt)

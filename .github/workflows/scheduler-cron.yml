@@ -1,0 +1,78 @@
+name: Scheduler Daily
+
+on:
+  schedule:
+    - cron: '0 10 * * *' # Ejecuta todos los días a las 10:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  run-daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PROJECT_NAME: WAV_Automata
+      ACCOUNTS_JSON: ${{ vars.SCHEDULER_ACCOUNTS_JSON }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Start API (Uvicorn)
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          echo $! > uvicorn.pid
+
+      - name: Wait for health
+        run: |
+          for i in {1..40}; do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
+              echo "Healthcheck OK"; exit 0; fi; sleep 0.5; done
+          echo "Healthcheck failed"; exit 1
+
+      - name: Build run payload
+        run: |
+          python - <<'PY'
+          import json, os
+          accounts = os.environ.get('ACCOUNTS_JSON')
+          try:
+              acc_list = json.loads(accounts) if accounts else ["vibecodinglatam"]
+          except Exception:
+              acc_list = ["vibecodinglatam"]
+          payload = {"accounts": acc_list}
+          with open('run_payload.json','w') as f:
+              json.dump(payload, f)
+          print('Payload:', payload)
+          PY
+
+      - name: Execute /scheduler/run_daily
+        run: |
+          mkdir -p outputs
+          TS=$(date -u +%Y%m%dT%H%M%SZ)
+          curl -fsS -X POST http://127.0.0.1:8000/scheduler/run_daily \
+            -H 'Content-Type: application/json' \
+            --data-binary @run_payload.json \
+            -o outputs/scheduler_run_${TS}.json
+          cat outputs/scheduler_run_${TS}.json | head -c 1000 || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-run-${{ github.run_id }}
+          path: outputs/*.json
+
+      - name: Stop API
+        if: always()
+        run: |
+          if [ -f uvicorn.pid ]; then kill $(cat uvicorn.pid) || true; fi

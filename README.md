@@ -83,6 +83,40 @@ curl -s http://127.0.0.1:8000/scheduler/trends | jq
 
 ---
 
+### 🔐 Seguridad y administración
+
+Endpoints protegidos
+- `POST /scheduler/weights/update` requiere header `X-Admin-Token` y valida rangos.
+
+Ejemplos curl
+```bash
+# Consultar pesos actuales
+curl -s "http://127.0.0.1:8000/scheduler/weights?account=vibecodinglatam" | jq
+
+# Actualizar pesos (token en header)
+curl -s -X POST http://127.0.0.1:8000/scheduler/weights/update \
+	-H "Content-Type: application/json" \
+	-H "X-Admin-Token: $ADMIN_TOKEN" \
+	-d '{
+				"account":"vibecodinglatam",
+				"w_engagement":0.65,
+				"w_relevance":0.35,
+				"learning_rate":0.05
+			}' | jq
+```
+
+Configurar token
+- Local: agregar en `.env`
+	- `ADMIN_TOKEN=<tu_token_secreto>`
+- GitHub Actions (repo → Settings → Secrets and variables → Actions):
+	- Nuevo secreto: `ADMIN_TOKEN` con el mismo valor
+
+Buenas prácticas
+- No commitear `.env` ni tokens.
+- Rotar periódicamente el token y limitar su alcance.
+
+---
+
 ### 🧰 Atajos con Makefile
 
 ```bash

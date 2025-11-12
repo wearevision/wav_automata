@@ -100,7 +100,9 @@ class AutoGenerateRequest(BaseModel):
 class AutoGenerateResponse(BaseModel):
     scheduled: NextPostResponse
     content: GeneratorResponse
-    item_id: Optional[int] = None
+    # Nota: En algunas instalaciones la tabla `items` usa BIGSERIAL (int)
+    # y en otras UUID. Para compatibilidad amplia, exponemos item_id como str.
+    item_id: Optional[str] = None
 
 
 class WeightsResponse(BaseModel):
@@ -580,7 +582,7 @@ def auto_generate(payload: AutoGenerateRequest) -> AutoGenerateResponse:
     content = generate_post(gen_req)
 
     # 3) Persistencia (best-effort)
-    item_id: Optional[int] = None
+    item_id: Optional[str] = None
     try:
         supabase = get_client()
         resp = (
@@ -596,7 +598,10 @@ def auto_generate(payload: AutoGenerateRequest) -> AutoGenerateResponse:
             .execute()
         )
         if resp.data:
-            item_id = resp.data[0].get("id")
+            _id = resp.data[0].get("id")
+            # Coerce a string para soportar BIGINT o UUID sin validar tipo
+            if _id is not None:
+                item_id = str(_id)
     except Exception:
         item_id = None
 

@@ -445,9 +445,10 @@ def store_feedback(payload: FeedbackRequest) -> FeedbackResponse:
                 "posted_at": datetime.now(timezone.utc).isoformat(),
             }
         ).execute()
+        stored_ok = True
     except Exception:
-        # Si no se pudo guardar, seguir con aprendizaje de todas formas
-        pass
+        # Si no se pudo guardar, seguir con aprendizaje y reportar stored=False
+        stored_ok = False
 
     # Mini gradient descent learning
     try:
@@ -495,7 +496,7 @@ def store_feedback(payload: FeedbackRequest) -> FeedbackResponse:
     except Exception as e:
         print("[scheduler.learning] warning:", e)
 
-    return FeedbackResponse(status="ok", stored=True, engagement_score=round(engagement, 4))
+    return FeedbackResponse(status="ok", stored=bool(stored_ok), engagement_score=round(engagement, 4))
 
 
 @router.get("/trends", response_model=List[TrendItem])

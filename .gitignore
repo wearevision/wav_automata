@@ -2,8 +2,9 @@
 
 # Env files
 .env
-*.env
-.env.*
+.env.local
+.env.*.local
+# Note: .env.example IS tracked (template for local .env)
 
 # Python caches
 __pycache__/
